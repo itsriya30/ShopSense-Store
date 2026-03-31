@@ -1,123 +1,128 @@
-// ================================================================
-//  FILE: backend/scripts/seed.js
-//  PURPOSE: Insert realistic fake data so the dashboard has
-//           something to show immediately when you open it.
-//
-//  RUN ONCE: node scripts/seed.js
-//
-//  WHAT IT CREATES:
-//    - 60 sessions spread across the last 24 hours
-//    - 500 events (views, clicks, purchases etc.)
-//    - Events are weighted realistically:
-//        40% views, 30% clicks, 20% cart_adds,
-//        5% cart_removes, 3% checkouts, 2% purchases
-// ================================================================
+﻿// FILE: backend/scripts/seed.js
+// Run: node scripts/seed.js
+// Seeds 28 days of realistic e-commerce event data
 
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const pool = require('../db');
 
-// ── Seed data constants ──────────────────────────────────────────
-const PRODUCTS = ['P001', 'P002', 'P003', 'P004', 'P005', 'P006', 'P007', 'P008'];
-const DEVICES  = ['Mobile', 'Desktop', 'Tablet'];
-const LOCATIONS = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Ahmedabad', 'Kolkata'];
-const SOURCES = ['Google', 'Instagram', 'Direct', 'Email', 'YouTube'];
-
-// Weighted event types — more views than purchases (realistic)
-const EVENT_TYPES = [
-    'view', 'view', 'view', 'view',          // 4 views   = 40%
-    'click', 'click', 'click',               // 3 clicks  = 30%
-    'cart_add', 'cart_add',                  // 2 cart    = 20%
-    'cart_remove',                           // 1 remove  = 5%
-    'checkout',                              // 1 checkout= 3%  (approx)
-    'purchase',                              // 1 purchase= 2%  (approx)
+const PRODUCTS = [
+  { id:'P001', price:999  },
+  { id:'P002', price:180  },
+  { id:'P003', price:1299 },
+  { id:'P004', price:69   },
+  { id:'P005', price:349  },
+  { id:'P006', price:190  },
+  { id:'P007', price:1099 },
+  { id:'P008', price:45   },
 ];
 
-// Product prices — needed to set revenue for purchases
-const PRODUCT_PRICES = {
-    P001: 999,   // iPhone 15 Pro
-    P002: 180,   // Nike Air Max
-    P003: 1299,  // MacBook Air M3
-    P004: 69,    // Levi's 501
-    P005: 349,   // Sony Headphones
-    P006: 190,   // Adidas Ultraboost
-    P007: 1099,  // iPad Pro
-    P008: 45,    // Protein Powder
-};
+const DEVICES   = ['Mobile','Desktop','Tablet'];
+const LOCATIONS = ['India','Mumbai','Delhi','Bangalore','London','New York','Dubai','Singapore'];
+const SOURCES   = ['Google','Direct','Instagram','Facebook','YouTube','Other'];
 
-// ── Helper functions ─────────────────────────────────────────────
-const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-const pick = (arr)      => arr[Math.floor(Math.random() * arr.length)];
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randFloat(min, max) { return +(Math.random() * (max - min) + min).toFixed(2); }
 
-// ── Main seed function ───────────────────────────────────────────
 async function seed() {
-    console.log('');
-    console.log('🌱  Starting database seed...');
-    console.log('');
+  const conn = await pool.getConnection();
+  try {
+    console.log('Clearing old data...');
+    await conn.execute('SET FOREIGN_KEY_CHECKS=0');
+    await conn.execute('TRUNCATE TABLE events');
+    await conn.execute('TRUNCATE TABLE sessions');
+    await conn.execute('SET FOREIGN_KEY_CHECKS=1');
 
-    const conn = await pool.getConnection();
+    const now = new Date();
+    let sessionRows = [];
+    let eventRows   = [];
 
-    try {
-        // ── STEP 1: Insert 60 sessions ───────────────────────────
-        console.log('   Creating 60 sessions...');
-        const sessionIds = [];
+    console.log('Generating 28 days of data...');
 
-        for (let i = 1; i <= 60; i++) {
-            const sessionId    = `S${1000 + i}`;
-            const minutesAgo   = rand(1, 1440);   // random time in last 24 hours
+    for (let day = 27; day >= 0; day--) {
+      // More sessions on recent days
+      const sessionsToday = rand(15, 60);
 
-            sessionIds.push(sessionId);
+      for (let s = 0; s < sessionsToday; s++) {
+        const sid      = 'U' + (now.getTime() - day*86400000) + s + Math.random().toString(36).slice(2,5).toUpperCase();
+        const device   = pick(DEVICES);
+        const location = pick(LOCATIONS);
+        const source   = pick(SOURCES);
+        const duration = rand(30, 600);
 
-            await conn.execute(
-                `INSERT IGNORE INTO sessions
-                 (session_id, device_type, location, traffic_source, session_duration, started_at)
-                 VALUES(?, ?, ?, ?, ?, DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
-                [
-                    sessionId,
-                    pick(DEVICES),
-                    pick(LOCATIONS),
-                    pick(SOURCES),
-                    rand(30, 600),      // session duration: 30 sec to 10 min
-                    minutesAgo,
-                ]
-            );
+        // Session started_at = random time during that day
+        const startedAt = new Date(now);
+        startedAt.setDate(now.getDate() - day);
+        startedAt.setHours(rand(0,23), rand(0,59), rand(0,59), 0);
+
+        sessionRows.push([sid, device, location, source, duration, startedAt]);
+
+        // Each session views 2-6 products
+        const viewCount = rand(2, 6);
+        const viewedProducts = [...PRODUCTS].sort(() => Math.random()-0.5).slice(0, viewCount);
+
+        for (const prod of viewedProducts) {
+          const evTime = new Date(startedAt.getTime() + rand(5,60)*1000);
+
+          // view
+          eventRows.push([sid, prod.id, 'view', 0, evTime]);
+
+          // 50% chance click
+          if (Math.random() < 0.5) {
+            eventRows.push([sid, prod.id, 'click', 0, new Date(evTime.getTime() + rand(3,15)*1000)]);
+
+            // 35% chance cart_add
+            if (Math.random() < 0.35) {
+              eventRows.push([sid, prod.id, 'cart_add', 0, new Date(evTime.getTime() + rand(10,30)*1000)]);
+
+              // 40% chance checkout
+              if (Math.random() < 0.4) {
+                eventRows.push([sid, prod.id, 'checkout', 0, new Date(evTime.getTime() + rand(20,60)*1000)]);
+
+                // 60% chance purchase
+                if (Math.random() < 0.6) {
+                  eventRows.push([sid, prod.id, 'purchase', prod.price, new Date(evTime.getTime() + rand(30,90)*1000)]);
+                }
+              }
+            }
+          }
         }
-
-        console.log('   ✅  60 sessions inserted');
-
-        // ── STEP 2: Insert 500 events ────────────────────────────
-        console.log('   Creating 500 events...');
-
-        for (let i = 0; i < 500; i++) {
-            const sessionId  = pick(sessionIds);
-            const productId  = pick(PRODUCTS);
-            const eventType  = pick(EVENT_TYPES);
-            const revenue    = eventType === 'purchase' ? PRODUCT_PRICES[productId] : 0;
-            const minutesAgo = rand(1, 1440);
-
-            await conn.execute(
-                `INSERT INTO events
-                 (session_id, product_id, event_type, revenue, created_at)
-                 VALUES(?, ?, ?, ?, DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
-                [sessionId, productId, eventType, revenue, minutesAgo]
-            );
-        }
-
-        console.log('   ✅  500 events inserted');
-
-        // ── Done ─────────────────────────────────────────────────
-        console.log('');
-        console.log('🎉  Seed complete!');
-        console.log('   Now start the backend: npm run dev');
-        console.log('   Then start the frontend: npm start');
-        console.log('');
-
-    } catch (err) {
-        console.error('❌  Seed failed:', err.message);
-        console.error(err);
-    } finally {
-        conn.release();
-        process.exit(0);
+      }
     }
+
+    // Batch insert sessions
+    console.log(`Inserting ${sessionRows.length} sessions...`);
+    for (let i = 0; i < sessionRows.length; i += 100) {
+      const batch = sessionRows.slice(i, i+100);
+      const placeholders = batch.map(() => '(?,?,?,?,?,?)').join(',');
+      const flat = batch.flat();
+      await conn.execute(
+        `INSERT IGNORE INTO sessions (session_id,device_type,location,traffic_source,session_duration,started_at) VALUES ${placeholders}`,
+        flat
+      );
+    }
+
+    // Batch insert events
+    console.log(`Inserting ${eventRows.length} events...`);
+    for (let i = 0; i < eventRows.length; i += 200) {
+      const batch = eventRows.slice(i, i+200);
+      const placeholders = batch.map(() => '(?,?,?,?,?)').join(',');
+      const flat = batch.flat();
+      await conn.execute(
+        `INSERT INTO events (session_id,product_id,event_type,revenue,created_at) VALUES ${placeholders}`,
+        flat
+      );
+    }
+
+    console.log('Done! Seed complete.');
+    console.log(`Sessions: ${sessionRows.length}`);
+    console.log(`Events:   ${eventRows.length}`);
+  } catch(err) {
+    console.error('Seed error:', err.message);
+  } finally {
+    conn.release();
+    process.exit(0);
+  }
 }
 
 seed();

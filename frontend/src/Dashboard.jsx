@@ -74,7 +74,7 @@ function KPI({ label, value, color }) {
   const [glow, setGlow] = useState(false), prev = useRef(value);
   useEffect(() => { if (prev.current!==value){setGlow(true);prev.current=value;setTimeout(()=>setGlow(false),900);} }, [value]);
   return (
-    <div style={{background:"#fff",border:"1px solid "+(glow?color:"#e2e8f0"),borderTop:"3px solid "+color,borderRadius:12,padding:"18px 16px",textAlign:"center",transition:"all 0.4s",boxShadow:glow?"0 0 20px "+color+"30":"0 1px 3px rgba(0,0,0,0.07)"}}>
+    <div style={{background:"#fff",borderLeft:"1px solid "+(glow?color:"#e2e8f0"),borderRight:"1px solid "+(glow?color:"#e2e8f0"),borderBottom:"1px solid "+(glow?color:"#e2e8f0"),borderTop:"3px solid "+color,borderRadius:12,padding:"18px 16px",textAlign:"center",transition:"all 0.4s",boxShadow:glow?"0 0 20px "+color+"30":"0 1px 3px rgba(0,0,0,0.07)"}}>
       <div style={{fontSize:11,color:"#718096",fontWeight:600,marginBottom:8}}>{label}</div>
       <div style={{fontSize:26,fontWeight:900,color:glow?color:"#1a202c",fontFamily:"monospace",letterSpacing:"-1px",transition:"color 0.4s"}}>{value}</div>
     </div>
@@ -256,19 +256,13 @@ export default function Dashboard() {
           <Card title="Revenue Over Time">
             {hourly.length===0?<Empty text="No revenue data yet"/>:
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={hourly}>
-                  <defs>
-                    <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#48bb78" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#48bb78" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
+                <LineChart data={hourly}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
                   <XAxis dataKey="time" tick={{fontSize:10}} interval={2}/>
                   <YAxis tick={{fontSize:10}}/>
                   <Tooltip contentStyle={TT} formatter={v=>toINR(v)}/>
-                  <Area type="monotone" dataKey="revenue" stroke="#48bb78" fill="url(#revGrad)" strokeWidth={2} name="Revenue"/>
-                </AreaChart>
+                  <Line type="monotone" dataKey="revenue" stroke="#48bb78" strokeWidth={2} dot={false} name="Revenue"/>
+                </LineChart>
               </ResponsiveContainer>
             }
           </Card>
@@ -298,8 +292,8 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={revByProd}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                  <XAxis dataKey="name" tick={{fontSize:9}}/>
-                  <YAxis tick={{fontSize:10}} tickFormatter={v=>(v/1000).toFixed(0)+"k"}/>
+                  <XAxis dataKey="name" tick={{fontSize:9}} angle={-20} textAnchor="end" height={40}/>
+                  <YAxis tick={{fontSize:10}} tickFormatter={v=>v>=1000?(v/1000).toFixed(1)+"k":v}/>
                   <Tooltip contentStyle={TT} formatter={v=>toINR(v)}/>
                   <Bar dataKey="revenue" name="Revenue" radius={[4,4,0,0]}>
                     {revByProd.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}

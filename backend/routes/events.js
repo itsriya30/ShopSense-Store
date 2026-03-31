@@ -22,6 +22,13 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: `event_type must be: ${VALID.join(', ')}` });
 
   try {
+    // Auto-create session if it doesn't exist (handles CORS race conditions)
+    await pool.execute(
+      `INSERT IGNORE INTO sessions (session_id, device_type, location, traffic_source)
+       VALUES (?, 'Desktop', 'Unknown', 'Direct')`,
+      [session_id]
+    );
+
     // Save to MySQL
     const [result] = await pool.execute(
       `INSERT INTO events (session_id, product_id, event_type, revenue)

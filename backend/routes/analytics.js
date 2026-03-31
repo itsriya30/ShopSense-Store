@@ -7,11 +7,11 @@ router.get('/kpis', async (req, res) => {
   try {
     const [[k]]    = await pool.execute('SELECT * FROM vw_realtime_kpis');
     const [[sess]] = await pool.execute(
-      `SELECT COUNT(*) AS total_sessions FROM sessions WHERE started_at >= NOW() - INTERVAL 7 DAY`
+      `SELECT COUNT(*) AS total_sessions FROM sessions WHERE started_at >= NOW() - INTERVAL 3 MONTH`
     );
     const [[avg]]  = await pool.execute(
       `SELECT COALESCE(ROUND(AVG(session_duration)),0) AS avg_session
-       FROM sessions WHERE started_at >= NOW() - INTERVAL 7 DAY`
+       FROM sessions WHERE started_at >= NOW() - INTERVAL 3 MONTH`
     );
     const abandon = k.total_cart_adds > 0
       ? (((k.total_cart_adds - k.total_purchases)/k.total_cart_adds)*100).toFixed(1)
@@ -36,7 +36,7 @@ router.get('/funnel', async (req, res) => {
          SUM(CASE WHEN event_type='cart_add'  THEN 1 ELSE 0 END) AS cart_adds,
          SUM(CASE WHEN event_type='checkout'  THEN 1 ELSE 0 END) AS checkouts,
          SUM(CASE WHEN event_type='purchase'  THEN 1 ELSE 0 END) AS purchases
-       FROM events WHERE created_at >= NOW() - INTERVAL 7 DAY`
+       FROM events WHERE created_at >= NOW() - INTERVAL 3 MONTH`
     );
     res.json([
       { stage:'Views',       value: c.views     ||0 },
@@ -59,7 +59,7 @@ router.get('/traffic', async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT traffic_source AS source, COUNT(*) AS count
-       FROM sessions WHERE started_at >= NOW() - INTERVAL 7 DAY
+       FROM sessions WHERE started_at >= NOW() - INTERVAL 3 MONTH
        GROUP BY traffic_source ORDER BY count DESC`
     );
     res.json(rows);
@@ -70,7 +70,7 @@ router.get('/devices', async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT device_type AS type, COUNT(*) AS count
-       FROM sessions WHERE started_at >= NOW() - INTERVAL 7 DAY
+       FROM sessions WHERE started_at >= NOW() - INTERVAL 3 MONTH
        GROUP BY device_type ORDER BY count DESC`
     );
     res.json(rows);
